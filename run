@@ -1,0 +1,3 @@
+#/bin/bash
+
+cargo run --release "/Users/scott/Code/VideoScripts/episode-names/Bluey.tsv" "/Users/scott/Travel" "{SeriesTitle} {SeasonNumber}{EpisodeNumber} - 5HA1-T" "{SeriesTitle} {SeasonNumber}{EpisodeNumber} {EpisodeTitle}" --dry-run

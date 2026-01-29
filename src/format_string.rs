@@ -76,7 +76,7 @@ impl FormatString {
         result
     }
 
-    pub fn format(&self, values: &std::collections::HashMap<&str, &str>) -> Result<String, String> {
+    pub fn format_map(&self, values: &std::collections::HashMap<&str, &str>) -> Result<String, String> {
         let mut result = String::new();
         for part in &self.parts {
             match part {
@@ -87,6 +87,21 @@ impl FormatString {
                     } else {
                         return Err(format!("Missing value for variable '{}'", var));
                     }
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    pub fn format_names_and_values(&self, names: &std::collections::HashMap<String, usize>, values: &[String]) -> Result<String, String> {
+        let mut result = String::new();
+        for part in &self.parts {
+            match part {
+                FormatStringPart::Literal(lit) => result.push_str(&lit),
+                FormatStringPart::Variable(var) => {
+                    let index = names.get(var).ok_or_else(|| format!("Unknown variable name '{}'", var))?;
+                    let value = values.get(*index).ok_or_else(|| format!("No value for variable '{}'", var))?;
+                    result.push_str(value);
                 }
             }
         }
@@ -123,13 +138,13 @@ mod tests {
         map.insert(&"SeasonNumber", &"01");
         map.insert(&"EpisodeNumber", &"02");
 
-        let resolved = parsed.format(&map);
+        let resolved = parsed.format_map(&map);
 
         assert!(resolved.is_ok());
         assert_eq!(resolved.unwrap(), "MyShow S01 E02");
 
         map.remove("SeriesTitle");
-        let unresolved = parsed.format(&map);
+        let unresolved = parsed.format_map(&map);
         assert!(unresolved.is_err());
         assert_eq!(unresolved.unwrap_err(), "Missing value for variable 'SeriesTitle'");
     }

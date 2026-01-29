@@ -1,12 +1,12 @@
-use std::io;
+use std::{collections::HashMap, io};
 
 pub struct Tsv {
-    pub headers: Vec<String>,
+    pub headers: HashMap<String, usize>,
     pub rows: Vec<Vec<String>>,
 }
 
 impl Tsv {
-    pub fn new(headers: Vec<String>, rows: Vec<Vec<String>>) -> Self {
+    pub fn new(headers: HashMap<String, usize>, rows: Vec<Vec<String>>) -> Self {
         Self { headers, rows }
     }
 
@@ -21,10 +21,11 @@ impl Tsv {
         let headers_line = lines.next().ok_or_else(|| { 
             io::Error::new(io::ErrorKind::InvalidData, "TSV file is empty") })?;
 
-        let headers: Vec<String> = headers_line
+        let headers: HashMap<String, usize> = headers_line
             .split('\t')
-            .map(|s| s.trim().to_string())
-            .collect();
+            .enumerate()
+            .map(|(i, s)| (s.trim().to_string(), i))
+        .collect::<HashMap<String, usize>>();
 
         let mut rows: Vec<Vec<String>> = Vec::new();
         for line in lines {
@@ -60,7 +61,11 @@ mod tests {
         assert!(tsv.is_ok());
         
         let tsv = tsv.unwrap();
-        assert_eq!(tsv.headers, vec!["name", "age", "city"]);
+        assert_eq!(tsv.headers.len(), 3);
+        assert_eq!(tsv.headers["name"], 0);
+        assert_eq!(tsv.headers["age"], 1);
+        assert_eq!(tsv.headers["city"], 2);
+        
         assert_eq!(
             tsv.rows,
             vec![

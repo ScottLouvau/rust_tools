@@ -1,8 +1,15 @@
+use anyhow::{Result, bail};
+
+/* FormatString is designed to contain literal parts and variable references, like "Series {Title} Season {SeasonNumber}".
+    A HashMap of recognized variable names mapping to indices must be passed to parse().
+    Variable Names are validated and converted to indices at parse time.
+    Then, during format(), a slice of values is passed in and the output value is constructed from the literal parts and corresponding variable values.
+ */
 
 #[derive(Debug, PartialEq)]
 pub enum FormatStringPart {
     Literal(String),
-    Variable(String),
+    Variable(usize)
 }
 
 #[derive(Debug, PartialEq)]
@@ -11,7 +18,7 @@ pub struct FormatString {
 }
 
 impl FormatString {
-    pub fn parse(format: &str) -> Result<Self, String> {
+    pub fn parse(format: &str, variable_indices: &std::collections::HashMap<String, usize>) -> Result<Self> {
         let mut parts = Vec::new();
         let mut current_literal = String::new();
         let mut in_variable = false;
@@ -21,7 +28,7 @@ impl FormatString {
             match c {
                 '{' => {
                     if in_variable {
-                        return Err(format!("Variable within variable at position {i} in format string."));
+                        bail!("Variable within variable at position {i} in format string.");
                     }
 
                     if !current_literal.is_empty() {
@@ -33,10 +40,11 @@ impl FormatString {
                 }
                 '}' => {
                     if !in_variable {
-                        return Err(format!("Closing brace without opening brace at position {i} in format string."));
+                        bail!("Closing brace without opening brace at position {i} in format string.");
                     }
 
-                    parts.push(FormatStringPart::Variable(variable_name.clone()));
+                    let var_index = variable_indices.get(&variable_name).ok_or_else(|| anyhow::anyhow!("Unknown variable name '{}'", variable_name))?;
+                    parts.push(FormatStringPart::Variable(*var_index));
                     variable_name.clear();
                     in_variable = false;
                 }
@@ -55,7 +63,7 @@ impl FormatString {
         }
 
         if in_variable {
-            return Err("Unclosed variable at end of format string.".to_string());
+            bail!("Unclosed variable at end of format string.");
         }
 
         Ok(FormatString { parts })
@@ -68,7 +76,7 @@ impl FormatString {
                 FormatStringPart::Literal(lit) => result.push_str(&lit),
                 FormatStringPart::Variable(var) => {
                     result.push('{');
-                    result.push_str(&var);
+                    result.push_str(&(*var.to_string()));
                     result.push('}');
                 }
             }
@@ -76,31 +84,13 @@ impl FormatString {
         result
     }
 
-    pub fn format_map(&self, values: &std::collections::HashMap<&str, &str>) -> Result<String, String> {
+    pub fn format(&self, values: &[String]) -> Result<String> {
         let mut result = String::new();
         for part in &self.parts {
             match part {
                 FormatStringPart::Literal(lit) => result.push_str(&lit),
-                FormatStringPart::Variable(var) => {
-                    if let Some(value) = values.get(var.as_str()) {
-                        result.push_str(value);
-                    } else {
-                        return Err(format!("Missing value for variable '{}'", var));
-                    }
-                }
-            }
-        }
-        Ok(result)
-    }
-
-    pub fn format_names_and_values(&self, names: &std::collections::HashMap<String, usize>, values: &[String]) -> Result<String, String> {
-        let mut result = String::new();
-        for part in &self.parts {
-            match part {
-                FormatStringPart::Literal(lit) => result.push_str(&lit),
-                FormatStringPart::Variable(var) => {
-                    let index = names.get(var).ok_or_else(|| format!("Unknown variable name '{}'", var))?;
-                    let value = values.get(*index).ok_or_else(|| format!("No value for variable '{}'", var))?;
+                FormatStringPart::Variable(index) => {
+                    let value = values.get(*index).ok_or_else(|| anyhow::anyhow!("A row didn't have enough columns"))?;
                     result.push_str(value);
                 }
             }
@@ -113,57 +103,57 @@ impl FormatString {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-
     use super::*;
 
     #[test]
     fn test_parse_format_string() {
+        let mut known_names = HashMap::from([
+            ("SeriesTitle".to_string(), 0),
+            ("SeasonNumber".to_string(), 1),
+            ("EpisodeNumber".to_string(), 2),
+        ]);
+
         let format = "{SeriesTitle} S{SeasonNumber} E{EpisodeNumber}";
-        
-        let parsed = FormatString::parse(format);
+
+        let parsed = FormatString::parse(format, &known_names);
         assert!(parsed.is_ok());
 
         let parsed = parsed.unwrap();
-        assert_eq!(parsed.to_string(), format);
+        assert_eq!(parsed.to_string(), "{0} S{1} E{2}");
 
         assert_eq!(parsed.parts.len(), 5);
-        assert_eq!(parsed.parts[0], FormatStringPart::Variable("SeriesTitle".to_string()));
+        assert_eq!(parsed.parts[0], FormatStringPart::Variable(0));
         assert_eq!(parsed.parts[1], FormatStringPart::Literal(" S".to_string()));
-        assert_eq!(parsed.parts[2], FormatStringPart::Variable("SeasonNumber".to_string()));
+        assert_eq!(parsed.parts[2], FormatStringPart::Variable(1));
         assert_eq!(parsed.parts[3], FormatStringPart::Literal(" E".to_string()));
-        assert_eq!(parsed.parts[4], FormatStringPart::Variable("EpisodeNumber".to_string()));
+        assert_eq!(parsed.parts[4], FormatStringPart::Variable(2));
 
-        let mut map: HashMap<&str, &str> = HashMap::new();
-        map.insert(&"SeriesTitle", &"MyShow");
-        map.insert(&"SeasonNumber", &"01");
-        map.insert(&"EpisodeNumber", &"02");
-
-        let resolved = parsed.format_map(&map);
+        let values = vec!["MyShow".to_string(), "01".to_string(), "02".to_string()];
+        let resolved = parsed.format(&values);
 
         assert!(resolved.is_ok());
         assert_eq!(resolved.unwrap(), "MyShow S01 E02");
 
-        map.remove("SeriesTitle");
-        let unresolved = parsed.format_map(&map);
-        assert!(unresolved.is_err());
-        assert_eq!(unresolved.unwrap_err(), "Missing value for variable 'SeriesTitle'");
+        known_names.remove("SeriesTitle");
+        let unresolved = FormatString::parse(format, &known_names);
+        assert!(unresolved.is_err()); // "Missing value for variable 'SeriesTitle'"
     }
 
     #[test]
     fn test_parse_format_string_errors() {
-        assert_eq!(
-            FormatString::parse("{SeriesTitle S{SeasonNumber} E{EpisodeNumber}").unwrap_err(),
-            "Variable within variable at position 14 in format string."
-        );
+        let known_names = HashMap::from([
+            ("SeriesTitle".to_string(), 0),
+            ("SeasonNumber".to_string(), 1),
+            ("EpisodeNumber".to_string(), 2),
+        ]);
 
-        assert_eq!(
-            FormatString::parse("SeriesTitle} S{SeasonNumber E{EpisodeNumber}").unwrap_err(),
-            "Closing brace without opening brace at position 11 in format string."
-        );
+        // "Variable within variable at position 14 in format string."
+        assert!(FormatString::parse("{SeriesTitle S{SeasonNumber} E{EpisodeNumber}", &known_names).is_err());
 
-        assert_eq!(
-            FormatString::parse("{SeriesTitle} S{SeasonNumber} E{EpisodeNumber").unwrap_err(),
-            "Unclosed variable at end of format string."
-        );
+        // "Closing brace without opening brace at position 11 in format string."
+        assert!(FormatString::parse("SeriesTitle} S{SeasonNumber E{EpisodeNumber}", &known_names).is_err());
+
+        // "Unclosed variable at end of format string."
+        assert!(FormatString::parse("{SeriesTitle} S{SeasonNumber} E{EpisodeNumber", &known_names).is_err());
     }
 }

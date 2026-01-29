@@ -1,4 +1,5 @@
 use std::{collections::HashMap, fs::DirEntry, io};
+use anyhow::{Context, Result};
 
 pub mod format_string;
 pub mod tsv;
@@ -16,12 +17,6 @@ const USAGE: &str = "Rename show episodes using a TSV to map old names to new na
   rename the file to the to-name-format using values from the same TSV row.
 ";
 
-// TODO:
-//   Check I/O errors.
-//   Better design bindings between Tsv and FormatString. ColumnIndex option, and map variables to ColumnIndex before main loop?
-//.  'Do' option to allow dry-run verification?
-//.  Terser code for wrapping error message, outputting, stopping?
-
 fn main() {
     let args = std::env::args().collect::<Vec<String>>();
     if args.len() < 4 {
@@ -35,67 +30,40 @@ fn main() {
     let to_name_format = &args[4];
     let really_do = args.len() < 6 || &args[5] != "--dry-run";
 
-    let mappings_tsv = match tsv::Tsv::from_file(mappings_tsv_path) {
-        Ok(tsv) => tsv,
+    match run(mappings_tsv_path, within_folder_path, from_name_format, to_name_format, really_do) {
+        Ok(_) => {}
         Err(e) => {
-            eprintln!("Error reading TSV file '{}': {}", mappings_tsv_path, e);
+            eprintln!("{}", e);
             std::process::exit(1);
         }
-    };
+    }
+}
 
-    let from_name_formatter = match format_string::FormatString::parse(from_name_format) {
-        Ok(formatter) => formatter,
-        Err(e) => {
-            eprintln!("Error in from-name-format: {}", e);
-            std::process::exit(1);
-        }
-    };
+fn run(mappings_tsv_path: &str, within_folder_path: &str, from_name_format: &str, to_name_format: &str, really_do: bool) -> Result<()> {
+    // Parse TSV (error if file not found, not readable, or rows have different column count than header row)
+    let mappings_tsv = tsv::Tsv::from_file(mappings_tsv_path).with_context(|| format!("reading TSV file '{}'", mappings_tsv_path))?;
 
-    let to_name_formatter = match format_string::FormatString::parse(to_name_format) {
-        Ok(formatter) => formatter,
-        Err(e) => {
-            eprintln!("Error in to-name-format: {}", e);
-            std::process::exit(1);
-        }
-    };
+    // Parse format strings, converting variable names to column indices (error if variable name not in TSV header)
+    let from_name_formatter = format_string::FormatString::parse(from_name_format, &mappings_tsv.headers)?;
+    let to_name_formatter = format_string::FormatString::parse(to_name_format, &mappings_tsv.headers)?;
 
     let mut renaming_map = HashMap::new();
     let mut backwards_map = HashMap::new();
     for row in mappings_tsv.rows.iter() {
-        let from_name = match from_name_formatter.format_names_and_values(&mappings_tsv.headers, &row) {
-            Ok(name) => name,
-            Err(e) => {
-                eprintln!("Error formatting from-name: {}", e);
-                std::process::exit(1);
-            }
-        };
-
-        let to_name = match to_name_formatter.format_names_and_values(&mappings_tsv.headers, &row) {
-            Ok(name) => name,
-            Err(e) => {
-                eprintln!("Error formatting to-name: {}", e);
-                std::process::exit(1);
-            }
-        };
+        let from_name = from_name_formatter.format(&row)?;
+        let to_name = to_name_formatter.format(&row)?;
 
         if backwards_map.insert(to_name.clone(), from_name.clone()).is_some() {
-            eprintln!("Error: Duplicate to-name '{}' generated from multiple TSV rows.", to_name);
-            std::process::exit(1);
+            return Result::Err(anyhow::anyhow!("Error: Duplicate to-name '{}' generated from multiple TSV rows.", to_name));
         }
 
         if renaming_map.insert(from_name, to_name).is_some() {
-            eprintln!("Error: Duplicate from-name generated from multiple TSV rows.");
-            std::process::exit(1);
+            return Result::Err(anyhow::anyhow!("Error: Duplicate from-name generated from multiple TSV rows."));
         }
     }
 
-    let result = rename_media_files(within_folder_path, &renaming_map, &backwards_map, really_do);
-    if let Err(e) = result {
-        eprintln!("Error: {}", e);
-        std::process::exit(1);
-    }
+    rename_media_files(within_folder_path, &renaming_map, &backwards_map, really_do)
 }
-
 
 
 fn get_files_recursive(root: &str) -> io::Result<Vec<DirEntry>> {
@@ -114,7 +82,7 @@ fn get_files_recursive(root: &str) -> io::Result<Vec<DirEntry>> {
     Ok(files)
 }
 
-fn rename_media_files(root_folder: &str, renaming_map: &HashMap<String, String>, backwards_map: &HashMap<String, String>, really_do: bool) -> io::Result<()> {
+fn rename_media_files(root_folder: &str, renaming_map: &HashMap<String, String>, backwards_map: &HashMap<String, String>, really_do: bool) -> Result<()> {
     let mut renamed_count = 0;
     let mut skipped_count = 0;
     let mut unmatched = Vec::new();

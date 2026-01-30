@@ -1,4 +1,5 @@
-use std::{collections::HashMap, io};
+use std::collections::HashMap;
+use anyhow::{Context, Result, bail};
 
 pub struct Tsv {
     pub headers: HashMap<String, usize>,
@@ -10,17 +11,15 @@ impl Tsv {
         Self { headers, rows }
     }
 
-    pub fn from_file(path: &str) -> io::Result<Self> {
-        let content = std::fs::read_to_string(path)?;
+    pub fn from_file(path: &str) -> Result<Self> {
+        let content = std::fs::read_to_string(path).with_context(|| format!("Error reading TSV \"{path}\""))?;
         Self::from_text(&content)
     }
 
-    pub fn from_text(text: &str) -> io::Result<Self> {
+    pub fn from_text(text: &str) -> Result<Self> {
         let mut lines = text.lines();
 
-        let headers_line = lines.next().ok_or_else(|| { 
-            io::Error::new(io::ErrorKind::InvalidData, "TSV file is empty") })?;
-
+        let headers_line = lines.next().ok_or_else(|| { anyhow::anyhow!("TSV file is empty") })?;
         let headers: HashMap<String, usize> = headers_line
             .split('\t')
             .enumerate()
@@ -35,14 +34,9 @@ impl Tsv {
                 .collect();
 
             if row.len() != headers.len() {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!(
-                        "Row {} has {} columns but expected {} columns",
-                        rows.len() + 1,
-                        row.len(),
-                        headers.len())));
+                bail!("Row {} must have {} columns, like header, but has {} columns.", rows.len() + 1, headers.len(), row.len());
             }
+
             rows.push(row);
         }
 

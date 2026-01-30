@@ -32,8 +32,8 @@ fn main() {
 
     match run(mappings_tsv_path, within_folder_path, from_name_format, to_name_format, really_do) {
         Ok(_) => {}
-        Err(e) => {
-            eprintln!("{}", e);
+        Err(e) => {            
+            eprintln!("\n{:?}", e);
             std::process::exit(1);
         }
     }
@@ -41,24 +41,24 @@ fn main() {
 
 fn run(mappings_tsv_path: &str, within_folder_path: &str, from_name_format: &str, to_name_format: &str, really_do: bool) -> Result<()> {
     // Parse TSV (error if file not found, not readable, or rows have different column count than header row)
-    let mappings_tsv = tsv::Tsv::from_file(mappings_tsv_path).with_context(|| format!("reading TSV file '{}'", mappings_tsv_path))?;
+    let mappings_tsv = tsv::Tsv::from_file(mappings_tsv_path)?;
 
     // Parse format strings, converting variable names to column indices (error if variable name not in TSV header)
-    let from_name_formatter = format_string::FormatString::parse(from_name_format, &mappings_tsv.headers)?;
-    let to_name_formatter = format_string::FormatString::parse(to_name_format, &mappings_tsv.headers)?;
+    let from_name_formatter = format_string::FormatString::parse(from_name_format, &mappings_tsv.headers).context("From-Format Error")?;
+    let to_name_formatter = format_string::FormatString::parse(to_name_format, &mappings_tsv.headers).context("To-Format Error")?;
 
     let mut renaming_map = HashMap::new();
     let mut backwards_map = HashMap::new();
-    for row in mappings_tsv.rows.iter() {
+    for (index, row) in mappings_tsv.rows.iter().enumerate() {
         let from_name = from_name_formatter.format(&row)?;
         let to_name = to_name_formatter.format(&row)?;
 
         if backwards_map.insert(to_name.clone(), from_name.clone()).is_some() {
-            return Result::Err(anyhow::anyhow!("Error: Duplicate to-name '{}' generated from multiple TSV rows.", to_name));
+            return Result::Err(anyhow::anyhow!("Multiple TSV rows would rename to \"{to_name}\", including from \"{from_name}\" on row {}.", index + 2));
         }
 
-        if renaming_map.insert(from_name, to_name).is_some() {
-            return Result::Err(anyhow::anyhow!("Error: Duplicate from-name generated from multiple TSV rows."));
+        if renaming_map.insert(from_name.clone(), to_name.clone()).is_some() {
+            return Result::Err(anyhow::anyhow!("Multiple TSV rows would rename from \"{from_name}\", including to \"{to_name}\" on row {}.", index + 2));
         }
     }
 
@@ -96,7 +96,7 @@ fn rename_media_files(root_folder: &str, renaming_map: &HashMap<String, String>,
         let current_name = path.file_stem().unwrap_or_default().to_string_lossy();
 
         if let Some(new_name) = renaming_map.get(&current_name.to_string()) {
-            println!("{}{}  ->  {}{} RENAME", current_name, pad(&current_name, longest_name), new_name, pad(&new_name, longest_name));
+            println!("\"{}\"{}  ->  \"{}\"{} RENAME", current_name, pad(&current_name, longest_name), new_name, pad(&new_name, longest_name));
 
             let new_path = path.with_file_name(new_name).with_extension(extension);
             if really_do {
@@ -105,12 +105,12 @@ fn rename_media_files(root_folder: &str, renaming_map: &HashMap<String, String>,
             renamed_count += 1;
 
         } else if let Some(old_name) = backwards_map.get(&current_name.to_string()) {
-            println!("{}{}  ->  {}{}  SKIP", old_name, pad(&old_name, longest_name), current_name, pad(&current_name, longest_name));
+            println!("\"{}\"{}  ->  \"{}\"{}  SKIP", old_name, pad(&old_name, longest_name), current_name, pad(&current_name, longest_name));
             skipped_count += 1;
 
         } else {
-            println!("{}{} UNMATCHED", current_name, pad(&current_name, 2 * longest_name + 7));
-            unmatched.push(current_name.to_string());
+            println!("\"{}\"{} UNMATCHED", current_name, pad(&current_name, 2 * longest_name + 7));
+            unmatched.push(path.to_string_lossy().to_string());
         }
     }
 

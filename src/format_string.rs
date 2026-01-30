@@ -28,7 +28,7 @@ impl FormatString {
             match c {
                 '{' => {
                     if in_variable {
-                        bail!("Variable within variable at position {i} in format string.");
+                        bail!("\"{format}\" has variable within variable at position {i}.");
                     }
 
                     if !current_literal.is_empty() {
@@ -40,10 +40,10 @@ impl FormatString {
                 }
                 '}' => {
                     if !in_variable {
-                        bail!("Closing brace without opening brace at position {i} in format string.");
+                        bail!("\"{format}\" has closing brace without opening brace at position {i}.");
                     }
 
-                    let var_index = variable_indices.get(&variable_name).ok_or_else(|| anyhow::anyhow!("Unknown variable name '{}'", variable_name))?;
+                    let var_index = variable_indices.get(&variable_name).ok_or_else(|| anyhow::anyhow!("\"{format}\" refers to unknown variable name '{variable_name}'.\nKnown Names: {}", variable_indices.keys().cloned().collect::<Vec<_>>().join(", ")))?;
                     parts.push(FormatStringPart::Variable(*var_index));
                     variable_name.clear();
                     in_variable = false;
@@ -63,7 +63,7 @@ impl FormatString {
         }
 
         if in_variable {
-            bail!("Unclosed variable at end of format string.");
+            bail!("\"{format}\" has unclosed variable.");
         }
 
         Ok(FormatString { parts })

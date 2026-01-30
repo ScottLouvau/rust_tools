@@ -4,17 +4,19 @@ use anyhow::{Context, Result};
 pub mod format_string;
 pub mod tsv;
 
-const USAGE: &str = "Rename show episodes using a TSV to map old names to new names.
-  Usage: episode-renamer <using-mappings-csv-path> <within-folder-path> <from-name-format> <to-name-format> <--dry-run?>
-   Ex: episode-renamer \"./Bluey-Mappings.csv\" \"./Shows/Bluey (2018)\" \"{SourceTitle}_t{TitleNumber}\" \"{SeriesTitle} S{SeasonNumber} E{EpisodeNumber} {EpisodeTitle}\"
+const USAGE: &str = "Rename episode files from one naming pattern to another, using a TSV with mappings.
+  Usage: episode-renamer <mappings-tsv-path> <within-folder-path> <from-name-format> <to-name-format> <--dry-run?>
+   Ex: episode-renamer \"./Bluey-Mappings.tsv\" \"./Shows/Bluey (2018)\" \"{SourceTitle}_t{TitleNumber}\" \"{SeriesTitle} S{SeasonNumber} E{EpisodeNumber} {EpisodeTitle}\"
+
+   The format strings are applied to each row in the Mappings TSV to generate expected 'from' and 'to' file names.
+   Then, for each file under <within-folder-path>, if the filename (without extension) matches a from-name,
+   rename it to the corresponding to-name.
+   
    Pass --dry-run after arguments to show actions without doing renames.
 
-  In the format strings, names in {} must match column names in the TSV.
-  All other characters are interpreted as literals.
-
-  For all files under within-folder-path recursively,
-  if the filename (without extension) matches the from-name-format for any TSV row,
-  rename the file to the to-name-format using values from the same TSV row.
+   In format strings, names in {} must exactly match TSV column names.
+   All other characters are interpreted as literals.
+   Ex: \"{SeriesTitle} S{SeasonNumber}E{EpisodeNumber} - SuperHQ\" -> \"Bluey (2018) S01E05 - SuperHQ\"
 ";
 
 fn main() {

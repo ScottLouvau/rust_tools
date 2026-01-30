@@ -82,6 +82,10 @@ fn get_files_recursive(root: &str) -> io::Result<Vec<DirEntry>> {
     Ok(files)
 }
 
+fn file_name_without_extension(path: &std::path::Path) -> Option<String> {
+    path.file_stem().map(|s| s.to_string_lossy().to_string())
+}
+
 fn rename_media_files(root_folder: &str, renaming_map: &HashMap<String, String>, backwards_map: &HashMap<String, String>, really_do: bool) -> Result<()> {
     let mut renamed_count = 0;
     let mut skipped_count = 0;
@@ -93,7 +97,7 @@ fn rename_media_files(root_folder: &str, renaming_map: &HashMap<String, String>,
     for file in files.iter() {
         let path = file.path();
         let extension = path.extension().unwrap_or_default();
-        let current_name = path.file_stem().unwrap_or_default().to_string_lossy();
+        let current_name = file_name_without_extension(&path).unwrap_or_default();
 
         if let Some(new_name) = renaming_map.get(&current_name.to_string()) {
             println!("\"{}\"{}  ->  \"{}\"{} RENAME", current_name, pad(&current_name, longest_name), new_name, pad(&new_name, longest_name));
@@ -128,6 +132,12 @@ fn rename_media_files(root_folder: &str, renaming_map: &HashMap<String, String>,
         for name in unmatched.iter() {
             println!("  {}", name);
         }
+    }
+
+    if unmatched.len() > 0 && renamed_count == 0 {
+        eprintln!("\n\nNO FILES MATCHED\n  Expected names like:\n{}\n\n  Saw names like:\n{}", 
+            renaming_map.keys().take(5).map(|f| format!("    \"{}\"", f)).collect::<Vec<String>>().join("\n"), 
+            files.iter().take(5).map(|f| format!("    \"{}\"", file_name_without_extension(&f.path()).unwrap_or_default())).collect::<Vec<String>>().join("\n"));
     }
 
     Ok(())

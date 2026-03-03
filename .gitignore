@@ -3,3 +3,6 @@
 
 # Ignore build outputs
 target/
+
+# Ignore MacOS search hidden files
+.DS_Store

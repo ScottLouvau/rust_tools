@@ -1,0 +1,11 @@
+[workspace.package]
+authors = ["Scott Louvau"]
+license-file = "LICENSE"
+repository = "https://github.com/ScottLouvau/rust_tools"
+
+[workspace]
+resolver = "2"
+members = ["episode-renamer"]
+
+[workspace.dependencies]
+anyhow = "1.0.100"

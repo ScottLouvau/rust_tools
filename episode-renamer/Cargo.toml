@@ -3,9 +3,9 @@ name = "episode-renamer"
 version = "1.0.0"
 edition = "2024"
 description = "Rename episode files from one naming pattern to another, using a TSV with mappings."
-license-file = "../LICENSE"
-repository = "https://github.com/ScottLouvau/rust_tools/tree/main/episode-renamer"
 readme = "./README.md"
+authors.workspace = true
+license-file.workspace = true
 
 [dependencies]
 anyhow = "1.0.100"

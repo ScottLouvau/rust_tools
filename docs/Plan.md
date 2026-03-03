@@ -14,7 +14,7 @@ Extract pure-logic functions that take simple types and return values, leaving t
 
 ## Changes
 
-### 1. Extract `build_renaming_maps`
+### 1. Extract `build_renaming_maps` ✓
 
 **What:** Pull lines 52-65 of `run()` into a standalone function.
 
@@ -42,7 +42,7 @@ rename_media_files(within_folder_path, &renaming_map, &backwards_map, really_do)
 
 ---
 
-### 2. Introduce `FileAction` enum and `classify_file` function
+### 2. Introduce `FileAction` enum and `classify_file` function ✓
 
 **What:** Make the per-file rename/skip/unmatched decision an explicit, testable return value instead of inline branching with side effects.
 
@@ -76,7 +76,7 @@ Logic is the same three-branch check already in `rename_media_files()` lines 104
 
 ---
 
-### 3. Change `get_files_recursive` to return `io::Result<Vec<PathBuf>>`
+### 3. Change `get_files_recursive` to return `io::Result<Vec<PathBuf>>` ✓
 
 **What:** Currently returns `Vec<DirEntry>`, which is opaque and ties callers to the filesystem API. Changing to `Vec<PathBuf>` makes the return value a simple, ownable type and decouples downstream code from `DirEntry`.
 
@@ -105,7 +105,7 @@ tst/sample-structure/
 
 ---
 
-### 4. Make `rename_media_files` take a `Vec<PathBuf>`
+### 4. Make `rename_media_files` take a `Vec<PathBuf>` ✓
 
 **What:** Currently `rename_media_files` calls `get_files_recursive` internally, coupling it to filesystem discovery. Instead, have `run()` call `get_files_recursive` and pass the result in. This lets tests supply a fake file list without touching the filesystem.
 

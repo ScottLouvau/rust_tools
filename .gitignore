@@ -1,6 +1,9 @@
 # Ignore IDE settings
 .vscode/
 
+# Ignore Rust state
+Cargo.lock
+
 # Ignore build outputs
 target/
 

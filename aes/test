@@ -1,0 +1,158 @@
+#!/bin/bash
+
+NODE=src/aes.js
+RUST=./target/release/aes
+PASS=0
+FAIL=0
+
+check() {
+    if cmp -s -- "$1" "$2"; then
+        echo "PASS: Files are identical."
+        PASS=$((PASS + 1))
+    else
+        echo "FAIL: Files are different."
+        FAIL=$((FAIL + 1))
+    fi
+}
+
+cargo build -r
+
+# Set Password and Salt via Environment variables
+#   Include `export HISTCONTROL=ignorespace` in ~/.zshrc.
+#   Commands starting with space not in terminal history (~/.zsh_history)
+ export AES_PASSWORD="sample password"
+ export AES_SALT="8zUqk?w*rnU7LneIzJR&"
+
+echo
+echo "=== Rust Tests ==="
+
+echo
+echo "Rust: File Encryption"
+echo "---------------------"
+$RUST encrypt -i ./tst/sample.md -o ./tst/sample.md.aes
+$RUST decrypt -i ./tst/sample.md.aes -o ./tst/sample.md.out
+check ./tst/sample.md ./tst/sample.md.out
+rm -f ./tst/sample.md.aes ./tst/sample.md.out
+
+echo
+echo "Rust: File Encryption with Base64"
+echo "---------------------------------"
+$RUST encrypt -i ./tst/sample.md -o ./tst/sample.md.aes64 --base64
+$RUST decrypt -i ./tst/sample.md.aes64 -o ./tst/sample.md.out64 --base64
+check ./tst/sample.md ./tst/sample.md.out64
+rm -f ./tst/sample.md.aes64 ./tst/sample.md.out64
+
+echo
+echo "Rust: stdin/stdout with Base64"
+echo "------------------------------"
+cat ./tst/sample.md | $RUST encrypt --base64 > ./tst/stdio.aes64
+cat ./tst/stdio.aes64 | $RUST decrypt --base64 > ./tst/stdio.out64
+check ./tst/sample.md ./tst/stdio.out64
+rm -f ./tst/stdio.aes64 ./tst/stdio.out64
+
+echo
+echo "=== Node.js Tests ==="
+
+echo
+echo "Node: File Encryption"
+echo "---------------------"
+node $NODE encrypt -i ./tst/sample.md -o ./tst/sample.md.aes
+node $NODE decrypt -i ./tst/sample.md.aes -o ./tst/sample.md.out
+check ./tst/sample.md ./tst/sample.md.out
+rm -f ./tst/sample.md.aes ./tst/sample.md.out
+
+echo
+echo "Node: File Encryption with Base64"
+echo "---------------------------------"
+node $NODE encrypt -i ./tst/sample.md -o ./tst/sample.md.aes64 --base64
+node $NODE decrypt -i ./tst/sample.md.aes64 -o ./tst/sample.md.out64 --base64
+check ./tst/sample.md ./tst/sample.md.out64
+rm -f ./tst/sample.md.aes64 ./tst/sample.md.out64
+
+echo
+echo "Node: stdin/stdout with Base64"
+echo "------------------------------"
+cat ./tst/sample.md | node $NODE encrypt --base64 > ./tst/stdio.aes64
+cat ./tst/stdio.aes64 | node $NODE decrypt --base64 > ./tst/stdio.out64
+check ./tst/sample.md ./tst/stdio.out64
+rm -f ./tst/stdio.aes64 ./tst/stdio.out64
+
+echo
+echo "=== Cross-Compatibility Tests ==="
+
+echo
+echo "Cross: Rust Encrypt -> Node Decrypt (file)"
+echo "-------------------------------------------"
+$RUST encrypt -i ./tst/sample.md -o ./tst/cross.aes
+node $NODE decrypt -i ./tst/cross.aes -o ./tst/cross.out
+check ./tst/sample.md ./tst/cross.out
+rm -f ./tst/cross.aes ./tst/cross.out
+
+echo
+echo "Cross: Node Encrypt -> Rust Decrypt (file)"
+echo "-------------------------------------------"
+node $NODE encrypt -i ./tst/sample.md -o ./tst/cross.aes
+$RUST decrypt -i ./tst/cross.aes -o ./tst/cross.out
+check ./tst/sample.md ./tst/cross.out
+rm -f ./tst/cross.aes ./tst/cross.out
+
+echo
+echo "Cross: Rust Encrypt -> Node Decrypt (base64 stdin/stdout)"
+echo "---------------------------------------------------------"
+cat ./tst/sample.md | $RUST encrypt --base64 > ./tst/cross.aes64
+cat ./tst/cross.aes64 | node $NODE decrypt --base64 > ./tst/cross.out64
+check ./tst/sample.md ./tst/cross.out64
+rm -f ./tst/cross.aes64 ./tst/cross.out64
+
+echo
+echo "Cross: Node Encrypt -> Rust Decrypt (base64 stdin/stdout)"
+echo "---------------------------------------------------------"
+cat ./tst/sample.md | node $NODE encrypt --base64 > ./tst/cross.aes64
+cat ./tst/cross.aes64 | $RUST decrypt --base64 > ./tst/cross.out64
+check ./tst/sample.md ./tst/cross.out64
+rm -f ./tst/cross.aes64 ./tst/cross.out64
+
+echo
+echo "Cross: Rust Encrypt -> Node Decrypt (base64 file)"
+echo "--------------------------------------------------"
+$RUST encrypt -i ./tst/sample.md -o ./tst/cross.aes64 --base64
+node $NODE decrypt -i ./tst/cross.aes64 -o ./tst/cross.out64 --base64
+check ./tst/sample.md ./tst/cross.out64
+rm -f ./tst/cross.aes64 ./tst/cross.out64
+
+echo
+echo "Cross: Node Encrypt -> Rust Decrypt (base64 file)"
+echo "--------------------------------------------------"
+node $NODE encrypt -i ./tst/sample.md -o ./tst/cross.aes64 --base64
+$RUST decrypt -i ./tst/cross.aes64 -o ./tst/cross.out64 --base64
+check ./tst/sample.md ./tst/cross.out64
+rm -f ./tst/cross.aes64 ./tst/cross.out64
+
+echo
+echo "Node: Key Derivation Verification"
+echo "----------------------------------"
+EXPECTED_KEY="mf+ZT+unDv+jLz1ywmpLRozL6AXJWRGhPoNunte12fo="
+# Encrypt with derived password/salt, decrypt with explicit key (verifies key derivation matches)
+node $NODE encrypt -i ./tst/sample.md -o ./tst/kdf.aes -p "sample password" -s "8zUqk?w*rnU7LneIzJR&"
+node $NODE decrypt -i ./tst/kdf.aes -o ./tst/kdf.out -k "$EXPECTED_KEY"
+check ./tst/sample.md ./tst/kdf.out
+rm -f ./tst/kdf.aes ./tst/kdf.out
+
+echo
+echo "Node: create-salt produces output"
+echo "---------------------------------"
+SALT_OUTPUT=$(node $NODE create-salt 2>/dev/null)
+if echo "$SALT_OUTPUT" | grep -q "Generated Salt:"; then
+    echo "PASS: create-salt produced output."
+    PASS=$((PASS + 1))
+else
+    echo "FAIL: create-salt did not produce expected output."
+    FAIL=$((FAIL + 1))
+fi
+
+echo
+echo "========================="
+echo "Results: $PASS passed, $FAIL failed"
+if [ $FAIL -ne 0 ]; then
+    exit 1
+fi

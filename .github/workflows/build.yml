@@ -70,6 +70,5 @@ jobs:
         uses: houseabsolute/actions-rust-release@v0
         with:
           changes-file: ""
-          release-tag-prefix: ""
           executable-name: aes
           target: ${{ matrix.platform.target }}

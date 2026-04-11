@@ -6,6 +6,8 @@ Rather than doing all of the renames manually (and risking having to do it again
 
 ## Installation
 [Install Rust](https://rust-lang.org/tools/install/) if you haven't already, then run `cargo install episode-renamer`.
+Pre-built binaries for some operating systems can be found in the Releases section when the release branch is selected.
+
 
 ## Example Use
 With this tool, make a TSV file `Mappings.tsv` like:

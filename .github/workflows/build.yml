@@ -60,15 +60,5 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           args: "--release"
         if: ${{ !matrix.platform.skip-tests }}
-      - name: Publish artifacts and release
-        uses: houseabsolute/actions-rust-release@v0
-        with:
-          changes-file: ""
-          executable-name: episode-renamer
-          target: ${{ matrix.platform.target }}
-      - name: Publish artifacts and release
-        uses: houseabsolute/actions-rust-release@v0
-        with:
-          changes-file: ""
-          executable-name: aes
-          target: ${{ matrix.platform.target }}
+      - name: Release
+        uses: softprops/action-gh-release@v2

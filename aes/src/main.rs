@@ -9,6 +9,7 @@ use std::io::{Read, Write};
 
 mod friendly;
 
+// Matches Algorithm of:
 // https://obsidian.md/blog/verify-obsidian-sync-encryption/
 
 // Buffer Size for streaming encrypt/decrypt

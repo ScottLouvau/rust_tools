@@ -4,9 +4,12 @@ on:
   push:
     branches:
       - release
-      
+
 env:
   GITHUB_TOKEN: ${{ github.token }}
+
+permissions:
+  contents: write
 
 jobs:
   release:
@@ -67,5 +70,6 @@ jobs:
         uses: houseabsolute/actions-rust-release@v0
         with:
           changes-file: ""
+          release-tag-prefix: ""
           executable-name: aes
           target: ${{ matrix.platform.target }}
